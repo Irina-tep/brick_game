@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tetris Game Documentation</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 20px;
+        }
+
+        h1,
+        h2,
+        h3 {
+            color: #333;
+        }
+
+        pre {
+            background: #f4f4f4;
+            padding: 10px;
+            border-radius: 5px;
+        }
+
+        ul {
+            margin: 10px 0;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Документация игры Тетрис</h1>
+
+    <h2>Описание</h2>
+    <p>«Тетрис», наверное, одна из самых популярных игр для консоли Brickgame. Нередко и саму консоль называют тетрисом.
+        Цель игры — в наборе очков за построение линий из генерируемых игрой блоков. Очередной блок, сгенерированный
+        игрой, начинает опускаться вниз по игровому полю, пока не достигнет нижней границы или не столкнется с другим
+        блоком. Пользователь может поворачивать фигуры и перемещать их по горизонтали, стараясь составлять ряды. После
+        заполнения ряд уничтожается, игрок получает очки, а блоки, находящиеся выше заполненного ряда, опускаются вниз.
+        Игра заканчивается, когда очередная фигура останавливается в самом верхнем ряду.</p>
+
+
+
+    <h2 id="installation">Установка</h2>
+    <h3>Требования</h3>
+    <ul>
+        <li>GCC (GNU Compiler Collection)</li>
+        <li>библиотека NCurses </li>
+        <li>библиотека Check (для запуска тестов)</li>
+    </ul>
+
+    <h3>Этапы установки</h3>
+    <pre>
+1. Установите NCurses и библиотеку Check :
+
+2. Зайдите в папку src и ипользуйте цели из Makefile:
+   make install
+</pre>
+
+    <h2 id="usage">Запуск игры</h2>
+    <p>Запустите игру с помощью команды:</p>
+    <pre>./bild/tetris</pre>
+
+    <h2 id="game-controls">Кнопки управления игрой</h2>
+    <ul>
+        <li><strong>S:</strong> начало игры</li>
+        <li><strong>срелка влево:</strong> движение фигуры влево</li>
+        <li><strong>стрелка вправо:</strong> движение фигуры вправо</li>
+        <li><strong>стрелка вверх:</strong> Hard Drop</li>
+        <li><strong>стрелка вниз:</strong> движение фигуры вниз</li>
+        <li><strong>пробел:</strong> поворот фигуры на 90 градусов</li>
+        <li><strong>P/ENTER:</strong> пауза</li>
+        <li><strong>escape:</strong> выход из игры</li>
+    </ul>
+</body>
+
+</html>

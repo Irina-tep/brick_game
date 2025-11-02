@@ -1,0 +1,1580 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+brick_game/
+  tetris/
+    game_info.c
+    game_info.h
+    tetris_fsm.c
+    tetris_fsm.h
+    tetris.c
+    user_input.c
+    user_input.h
+dvi/
+  index.html
+FSM_diagram/
+  FSM.png
+gui/
+  cli/
+    interface.c
+    interface.h
+tests/
+  test.c
+.gitkeep
+Makefile
+max_score.txt
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="brick_game/tetris/game_info.c">
+#include "game_info.h"
+
+GameInfo_t updateCurrentState() {
+  State_t *state = getCurrentState();
+  GameInfo_t info;
+  int **field = create_matrix(FIELD_H, FIELD_W);
+  copy_matrix(state->field, field, FIELD_H, FIELD_W);
+  if (state->figure != NULL) {
+    for (int i = 0; i < state->size_figure; i++) {
+      for (int j = 0; j < state->size_figure; j++) {
+        int new_coord_x = state->coord_x + i;
+        int new_coord_y = state->coord_y + j;
+        if (state->figure[i][j] == 1 && new_coord_x >= 0 &&
+            new_coord_x < FIELD_H && new_coord_y < FIELD_W) {
+          field[new_coord_x][new_coord_y] = 1;
+        }
+      }
+    }
+  }
+
+  info.field = field;
+  info.score = state->score;
+  info.level = state->level;
+  info.speed = state->speed;
+  int **next = create_matrix(4, 4);
+  if (state->next != NULL && state->size_nextfigure > 0) {
+    int copy_size = (state->size_nextfigure < 4) ? state->size_nextfigure : 4;
+    for (int i = 0; i < copy_size; i++) {
+      for (int j = 0; j < copy_size; j++) {
+        if (i < state->size_nextfigure && j < state->size_nextfigure) {
+          next[i][j] = state->next[i][j];
+        }
+      }
+    }
+  }
+  info.next = next;
+  int hight_score;
+  FILE *file = fopen("max_score.txt", "r");
+  fscanf(file, "%d", &hight_score);
+  fclose(file);
+  info.high_score = hight_score;
+  info.pause = None;
+  if (state->status == Initial) {
+    info.pause = GameStart;
+  }
+  if (state->pause == 1) {
+    info.pause = GamePause;
+  }
+  if (state->status == GameOver) {
+    info.pause = YouLost;
+    init_state();
+  }
+  return info;
+}
+</file>
+
+<file path="brick_game/tetris/game_info.h">
+#ifndef GAME_INFO_H
+#define GAME_INFO_H
+
+#include "tetris_fsm.h"
+
+#define FIELD_H 20
+#define FIELD_W 10
+
+typedef enum {
+  None,
+  GameStart,
+  GamePause,
+  YouLost,
+} Banner;
+
+typedef struct {
+  int **field;
+  int **next;
+  int score;
+  int high_score;
+  int level;
+  int speed;
+  int pause;
+} GameInfo_t;
+
+GameInfo_t updateCurrentState();
+
+#endif
+</file>
+
+<file path="brick_game/tetris/tetris_fsm.c">
+#include "tetris_fsm.h"
+
+#include "user_input.h"
+
+State_t *getCurrentState() {
+  static State_t state;
+  return &state;
+}
+
+int **create_matrix(int row, int col) {
+  int **matrix = (int **)malloc(row * sizeof(int *));
+  for (int i = 0; i < row; i++) {
+    matrix[i] = (int *)calloc(col, sizeof(int));
+  }
+
+  return matrix;
+}
+
+int **create_figure(int *size_figure) {
+  int type_figure = rand() % 7;
+  if (type_figure == I_fig)
+    *size_figure = 4;
+  else if (type_figure == O_fig)
+    *size_figure = 2;
+  else
+    *size_figure = 3;
+  int **figure = create_matrix(*size_figure, *size_figure);
+  int **temp = create_matrix(*size_figure, *size_figure);
+  if (type_figure == I_fig) {
+    figure[0][0] = 1;
+    figure[0][1] = 1;
+    figure[0][2] = 1;
+    figure[0][3] = 1;
+  } else if (type_figure == O_fig) {
+    figure[0][0] = 1;
+    figure[0][1] = 1;
+    figure[1][0] = 1;
+    figure[1][1] = 1;
+  } else if (type_figure == S_fig) {
+    figure[0][1] = 1;
+    figure[0][2] = 1;
+    figure[1][0] = 1;
+    figure[1][1] = 1;
+  } else if (type_figure == Z_fig) {
+    figure[0][0] = 1;
+    figure[0][1] = 1;
+    figure[1][1] = 1;
+    figure[1][2] = 1;
+  } else if (type_figure == L_fig) {
+    figure[0][0] = 1;
+    figure[1][0] = 1;
+    figure[2][0] = 1;
+    figure[2][1] = 1;
+  } else if (type_figure == J_fig) {
+    figure[0][2] = 1;
+    figure[1][2] = 1;
+    figure[2][2] = 1;
+    figure[2][1] = 1;
+  } else {
+    figure[1][1] = 1;
+    figure[2][0] = 1;
+    figure[2][1] = 1;
+    figure[2][2] = 1;
+  }
+  int rotatoins = rand() % 4;
+  for (int i = 0; i < rotatoins; i++) {
+    rotate(temp, figure, *size_figure);
+    copy_matrix(temp, figure, *size_figure, *size_figure);
+  }
+  remove_matrix(temp, *size_figure);
+  return figure;
+}
+
+void remove_matrix(int **matrix, int size) {
+  if (matrix != NULL) {
+    for (int i = 0; i < size; i++) {
+      if (matrix[i] != NULL) {
+        free(matrix[i]);
+      }
+    }
+    free(matrix);
+  }
+}
+
+void copy_matrix(int **matr1, int **matr2, int row, int col) {
+  for (int i = 0; i < row; i++) {
+    for (int j = 0; j < col; j++) {
+      matr2[i][j] = matr1[i][j];
+    }
+  }
+}
+
+void rotate(int **new_figure, int **old_figure, int size) {
+  for (int i = 0; i < size; i++) {
+    for (int j = 0; j < size; j++) {
+      new_figure[i][j] = 0;
+    }
+  }
+  if (size == 4) {
+    if (old_figure[0][0] == 1) {
+      new_figure[0][1] = 1;
+      new_figure[1][1] = 1;
+      new_figure[2][1] = 1;
+      new_figure[3][1] = 1;
+    } else {
+      new_figure[0][0] = 1;
+      new_figure[0][1] = 1;
+      new_figure[0][2] = 1;
+      new_figure[0][3] = 1;
+    }
+  } else {
+    for (int i = 0; i < size; i++) {
+      for (int j = 0; j < size; j++) {
+        new_figure[j][size - i - 1] = old_figure[i][j];
+      }
+    }
+  }
+}
+
+void init_state() {
+  State_t *state = getCurrentState();
+  if (state->field != NULL) {
+    remove_matrix(state->field, FIELD_H);
+  }
+  if (state->figure != NULL) {
+    remove_matrix(state->figure, state->size_figure);
+  }
+  if (state->next != NULL) {
+    remove_matrix(state->next, state->size_nextfigure);
+  }
+  state->status = Initial;
+  int **field = create_matrix(FIELD_H, FIELD_W);
+  state->field = field;
+  state->score = 0;
+  state->level = 1;
+  state->speed = SPEED;
+  state->left_time = state->speed;
+  state->start_time = current_timeMs();
+  state->pause = 0;
+  state->coord_x = 0;
+  state->coord_y = 4;
+
+  state->figure = NULL;
+  state->size_figure = 0;
+
+  int size_nextfigure = 0;
+  state->next = create_figure(&size_nextfigure);
+  state->size_nextfigure = size_nextfigure;
+
+  srand(current_timeMs());
+}
+
+unsigned long long current_timeMs() {
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  return (unsigned long long)(tv.tv_sec) * 1000 +
+         (unsigned long long)(tv.tv_usec) / 1000;
+}
+
+unsigned long long procces_timer() {
+  State_t *state = getCurrentState();
+  unsigned long long left_time;
+  if (state->status == Initial) {
+    left_time = -1;
+  } else {
+    unsigned long long current_time = current_timeMs();
+    unsigned long long elapsed_time = current_time - state->start_time;
+    if (elapsed_time >= state->left_time) {
+      left_time = 0;
+    } else {
+      state->left_time -= elapsed_time;
+      state->start_time = current_time;
+      left_time = state->left_time;
+    }
+  }
+  return left_time;
+}
+
+void spawn_new_figure() {
+  State_t *state = getCurrentState();
+  if (state->figure != NULL) {
+    remove_matrix(state->figure, state->size_figure);
+  }
+  state->figure = state->next;
+  state->size_figure = state->size_nextfigure;
+  state->coord_x = -1;
+  if (state->size_figure == 2) {
+    state->coord_y = 4;
+  } else {
+    state->coord_y = 3;
+  }
+  int size_nextfigure;
+  int **next = create_figure(&size_nextfigure);
+  state->next = next;
+  state->size_nextfigure = size_nextfigure;
+  state->status = Moving;
+  state->start_time = current_timeMs();
+  state->left_time = state->speed;
+}
+
+void shift_figure() {
+  State_t *state = getCurrentState();
+  int attached = figure_attached();
+  if (attached == 0) {
+    (state->coord_x)++;
+    state->start_time = current_timeMs();
+    state->left_time = state->speed;
+    state->status = Moving;
+  } else {
+    state->status = Attaching;
+  }
+}
+
+void max_score() {
+  State_t *state = getCurrentState();
+  FILE *file;
+  file = fopen("max_score.txt", "r");
+  int hight_score;
+  fscanf(file, "%d", &hight_score);
+  fclose(file);
+
+  if (state->score > hight_score) {
+    file = fopen("max_score.txt", "w");
+    fprintf(file, "%d", state->score);
+    fclose(file);
+  }
+}
+
+void update_level() {
+  State_t *state = getCurrentState();
+  int new_level = state->score / NEW_LEVEL_THRESHOLD + 1;
+  if (new_level > MAX_LEVEL) {
+    new_level = MAX_LEVEL;
+  }
+  state->speed -= (new_level - state->level) * SPEED_STEP;
+  state->level = new_level;
+}
+
+void delete_row() {
+  State_t *state = getCurrentState();
+  int total_del_row = 0;
+  for (int i = 0; i < FIELD_H; i++) {
+    int count_del_row = 0;
+    for (int j = 0; j < FIELD_W; j++) {
+      count_del_row += state->field[i][j];
+    }
+    if (count_del_row == FIELD_W) {
+      for (int m = i; m > 0; m--) {
+        for (int k = 0; k < FIELD_W; k++) {
+          state->field[m][k] = state->field[m - 1][k];
+        }
+      }
+      for (int n = 0; n < FIELD_W; n++) {
+        state->field[0][n] = 0;
+      }
+      i--;
+      total_del_row++;
+    }
+  }
+  if (total_del_row == 1) {
+    state->score += 100;
+  } else if (total_del_row == 2) {
+    state->score += 300;
+  } else if (total_del_row == 3) {
+    state->score += 700;
+  } else if (total_del_row == 4) {
+    state->score += 1500;
+  }
+  max_score();
+  update_level();
+}
+
+void attach_figure() {
+  State_t *state = getCurrentState();
+  int game_over = 0;
+
+  for (int i = 0; i < state->size_figure; i++) {
+    for (int j = 0; j < state->size_figure; j++) {
+      if (state->figure[i][j] == 1) {
+        int new_coord_x = state->coord_x + i;
+        int new_coord_y = state->coord_y + j;
+
+        if (new_coord_x >= 0 && new_coord_x < FIELD_H && new_coord_y >= 0 &&
+            new_coord_y < FIELD_W) {
+          state->field[new_coord_x][new_coord_y] = 1;
+        } else if (new_coord_x < 0) {
+          game_over = 1;
+        }
+      }
+    }
+  }
+  if (game_over == 1) {
+    state->status = GameOver;
+  } else {
+    delete_row();
+    state->status = Spawn;
+  }
+}
+
+void game_over() {
+  State_t *state = getCurrentState();
+  if (state->figure != NULL && state->size_figure > 0) {
+    remove_matrix(state->figure, state->size_figure);
+    state->figure = NULL;
+  }
+  if (state->next != NULL && state->size_nextfigure > 0) {
+    remove_matrix(state->next, state->size_nextfigure);
+    state->next = NULL;
+  }
+  if (state->field != NULL) {
+    remove_matrix(state->field, FIELD_H);
+    state->field = NULL;
+  }
+}
+</file>
+
+<file path="brick_game/tetris/tetris_fsm.h">
+#ifndef TETRIS_FSM_H
+#define TETRIS_FSM_H
+#include <ncurses.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/time.h>
+#include <time.h>
+
+typedef enum { Initial, Spawn, Moving, Shifting, Attaching, GameOver } Status_t;
+
+typedef struct {
+  int status;
+  int **field;
+  int **figure;
+  int size_figure;
+  int **next;
+  int size_nextfigure;
+  int coord_x;
+  int coord_y;
+
+  int score;
+  int level;
+  int speed;
+  int pause;
+
+  unsigned long long start_time;
+  unsigned long long left_time;
+
+} State_t;
+
+typedef enum { O_fig, I_fig, S_fig, Z_fig, L_fig, J_fig, T_fig } figure;
+
+State_t *getCurrentState();
+int **create_matrix(int row, int col);
+int **create_figure(int *size_figure);
+
+void remove_matrix(int **matrix, int size);
+void copy_matrix(int **matr1, int **matr2, int row, int col);
+void rotate(int **new_figure, int **old_figure, int size);
+
+void init_state();
+unsigned long long current_timeMs();
+unsigned long long procces_timer();
+void spawn_new_figure();
+void shift_figure();
+void max_score();
+void update_level();
+void delete_row();
+void attach_figure();
+void game_over();
+#endif
+</file>
+
+<file path="brick_game/tetris/tetris.c">
+#include "tetris_fsm.h"
+#include "user_input.h"
+
+int main() {
+  initscr();
+  noecho();
+  curs_set(0);
+  cbreak();
+  keypad(stdscr, TRUE);
+  init_state();
+  render(updateCurrentState());
+  while (true) {
+    State_t *state = getCurrentState();
+
+    if (state->status == Initial || state->status == Moving) {
+      updateUserAction();
+    } else {
+      if (state->status == Spawn) {
+        spawn_new_figure();
+      } else if (state->status == Shifting) {
+        shift_figure();
+      } else if (state->status == Attaching) {
+        attach_figure();
+      } else if (state->status == GameOver) {
+        game_over();
+      }
+    }
+
+    render(updateCurrentState());
+  }
+  return 0;
+}
+</file>
+
+<file path="brick_game/tetris/user_input.c">
+#include "user_input.h"
+
+// LCOV_EXCL_START
+void updateUserAction() {
+  State_t *state = getCurrentState();
+  unsigned long long left_time = procces_timer();
+  timeout(left_time);
+  int input = getch();
+  if (input == ESCAPE) {
+    userInput(Terminate, false);
+    terminate_game();
+  } else if (state->status == Initial) {
+    if (input == START_BUTTON) {
+      userInput(Start, false);
+    }
+  } else {
+    if (input == ENTER_KEY || input == PAUSE_BUTTON) {
+      userInput(Pause, false);
+      render(updateCurrentState());
+      int inpt;
+      int pressed = 1;
+      while (pressed) {
+        inpt = getch();
+        if (inpt == ESCAPE) {
+          userInput(Terminate, false);
+          terminate_game();
+          pressed = 0;
+        } else if (inpt == PAUSE_BUTTON || inpt == ENTER_KEY) {
+          userInput(Pause, false);
+          pressed = 0;
+        }
+      }
+    } else if (input == KEY_LEFT) {
+      userInput(Left, false);
+    } else if (input == KEY_RIGHT) {
+      userInput(Right, false);
+    } else if ((input == KEY_DOWN)) {
+      userInput(Down, false);
+    } else if (input == ACTION_BUTTON) {
+      userInput(Action, false);
+    } else if (input == KEY_UP) {
+      userInput(Up, false);
+    } else if (input == ERR && state->status == Moving) {
+      state->status = Shifting;
+    }
+  }
+}
+// LCOV_EXCL_STOP
+
+void userInput(UserAction_t action, bool hold) {
+  if (!hold) {
+    switch (action) {
+      case Left:
+        move_left();
+        break;
+      case Right:
+        move_right();
+        break;
+      case Down:
+        move_down();
+        break;
+      case Up:
+        hard_drop();
+        break;
+      case Action:
+        rotate_figure();
+        break;
+      case Start:
+        start_game();
+        break;
+      case Pause:
+        pause_game();
+        break;
+      case Terminate:
+        game_over();
+        break;
+    }
+  }
+}
+
+void start_game() {
+  State_t *state = getCurrentState();
+  state->status = Spawn;
+}
+
+int figure_attached() {
+  State_t *state = getCurrentState();
+  int attached = 0;
+  for (int i = 0; i < state->size_figure; i++) {
+    for (int j = 0; j < state->size_figure; j++) {
+      if (state->figure[i][j] == 1) {
+        int new_coord_x = state->coord_x + 1 + i;
+        int new_coord_y = state->coord_y + j;
+        if ((new_coord_x >= FIELD_H) ||
+            ((new_coord_x >= 0) && (new_coord_y < FIELD_W) &&
+             (state->field[new_coord_x][new_coord_y] == 1)))
+          attached = 1;
+      }
+    }
+  }
+  return attached;
+}
+
+void move_left() {
+  State_t *state = getCurrentState();
+  int move_is_possible = 1;
+  for (int i = 0; i < state->size_figure; i++) {
+    for (int j = 0; j < state->size_figure; j++) {
+      int new_coord_x = state->coord_x + i;
+      int new_coord_y = state->coord_y - 1 + j;
+      if ((state->figure[i][j] == 1) && (new_coord_y < 0)) {
+        move_is_possible = 0;
+      } else if ((new_coord_y >= 0) && (new_coord_x >= 0) &&
+                 (new_coord_y < FIELD_W)) {
+        if ((state->figure[i][j] + state->field[new_coord_x][new_coord_y]) == 2)
+          move_is_possible = 0;
+      }
+    }
+  }
+  if (move_is_possible == 1) {
+    (state->coord_y)--;
+  }
+  state->status = Moving;
+}
+
+void move_right() {
+  State_t *state = getCurrentState();
+  int move_is_possible = 1;
+  for (int i = 0; i < state->size_figure; i++) {
+    for (int j = 0; j < state->size_figure; j++) {
+      int new_coord_x = state->coord_x + i;
+      int new_coord_y = state->coord_y + 1 + j;
+      if ((state->figure[i][j] == 1) && (new_coord_y >= FIELD_W)) {
+        move_is_possible = 0;
+      } else if ((new_coord_y < FIELD_W) && (new_coord_x >= 0)) {
+        if ((state->figure[i][j] + state->field[new_coord_x][new_coord_y]) == 2)
+          move_is_possible = 0;
+      }
+    }
+  }
+  if (move_is_possible == 1) {
+    (state->coord_y)++;
+  }
+
+  state->status = Moving;
+}
+
+void move_down() {
+  State_t *state = getCurrentState();
+  if (figure_attached() == 0) {
+    state->coord_x++;
+    state->start_time = current_timeMs();
+  }
+
+  if (figure_attached() == 1) {
+    state->status = Attaching;
+  } else {
+    state->status = Moving;
+  }
+}
+
+void rotate_figure() {
+  State_t *state = getCurrentState();
+  int **new_figure = create_matrix(state->size_figure, state->size_figure);
+  rotate(new_figure, state->figure, state->size_figure);
+  if (rotate_is_possible(new_figure) == 1) {
+    remove_matrix(state->figure, state->size_figure);
+    state->figure = new_figure;
+  } else {
+    remove_matrix(new_figure, state->size_figure);
+  }
+  int attached = figure_attached();
+  if (attached == 0) {
+    state->status = Moving;
+  } else {
+    state->status = Attaching;
+  }
+}
+
+int rotate_is_possible(int **new_figure) {
+  State_t *state = getCurrentState();
+  int is_possible = 1;
+  for (int i = 0; i < state->size_figure; i++) {
+    for (int j = 0; j < state->size_figure; j++) {
+      int new_coord_x = state->coord_x + i;
+      int new_coord_y = state->coord_y + j;
+
+      if (new_coord_y < 0 || new_coord_y >= FIELD_W || new_coord_x < 0 ||
+          new_coord_y >= FIELD_H) {
+        is_possible = 0;
+      } else if ((new_figure[i][j] + state->field[new_coord_x][new_coord_y]) ==
+                 2) {
+        is_possible = 0;
+      }
+    }
+  }
+  return is_possible;
+}
+
+void pause_game() {
+  State_t *state = getCurrentState();
+  if (state->pause == 0) {
+    state->pause = 1;
+    unsigned long long elapsedTime = current_timeMs() - state->start_time;
+    if (elapsedTime >= state->left_time) {
+      state->left_time = 0;
+    } else {
+      state->left_time = elapsedTime;
+    }
+  } else {
+    state->pause = 0;
+    state->start_time = current_timeMs();
+  }
+}
+
+void hard_drop() {
+  State_t *state = getCurrentState();
+  while (figure_attached() == 0) {
+    (state->coord_x)++;
+    render(updateCurrentState());
+    sleep(0.001);
+  }
+  state->status = Attaching;
+}
+</file>
+
+<file path="brick_game/tetris/user_input.h">
+#ifndef USER_INPUT_H
+#define USER_INPUT_H
+
+#include <stdbool.h>
+#include <unistd.h>
+
+#include "../../gui/cli/interface.h"
+
+#define ESCAPE 27
+#define ENTER_KEY 10
+#define ACTION_BUTTON 32
+#define PAUSE_BUTTON 112
+#define START_BUTTON 115
+
+#define SPEED 500
+#define SPEED_STEP 30
+#define NEW_LEVEL_THRESHOLD 600
+#define MAX_LEVEL 10
+
+typedef enum {
+  Start,
+  Pause,
+  Terminate,
+  Left,
+  Right,
+  Up,
+  Down,
+  Action
+} UserAction_t;
+
+void updateUserAction();
+void userInput(UserAction_t action, bool hold);
+void start_game();
+int figure_attached();
+void move_left();
+void move_right();
+void move_down();
+void rotate_figure();
+int rotate_is_possible(int **new_figure);
+void pause_game();
+void accelerate_move_left();
+void accelerate_move_right();
+void accelerate_move_down();
+void hard_drop();
+
+#endif
+</file>
+
+<file path="dvi/index.html">
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tetris Game Documentation</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 20px;
+        }
+
+        h1,
+        h2,
+        h3 {
+            color: #333;
+        }
+
+        pre {
+            background: #f4f4f4;
+            padding: 10px;
+            border-radius: 5px;
+        }
+
+        ul {
+            margin: 10px 0;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Документация игры Тетрис</h1>
+
+    <h2>Описание</h2>
+    <p>«Тетрис», наверное, одна из самых популярных игр для консоли Brickgame. Нередко и саму консоль называют тетрисом.
+        Цель игры — в наборе очков за построение линий из генерируемых игрой блоков. Очередной блок, сгенерированный
+        игрой, начинает опускаться вниз по игровому полю, пока не достигнет нижней границы или не столкнется с другим
+        блоком. Пользователь может поворачивать фигуры и перемещать их по горизонтали, стараясь составлять ряды. После
+        заполнения ряд уничтожается, игрок получает очки, а блоки, находящиеся выше заполненного ряда, опускаются вниз.
+        Игра заканчивается, когда очередная фигура останавливается в самом верхнем ряду.</p>
+
+
+
+    <h2 id="installation">Установка</h2>
+    <h3>Требования</h3>
+    <ul>
+        <li>GCC (GNU Compiler Collection)</li>
+        <li>библиотека NCurses </li>
+        <li>библиотека Check (для запуска тестов)</li>
+    </ul>
+
+    <h3>Этапы установки</h3>
+    <pre>
+1. Установите NCurses и библиотеку Check :
+
+2. Зайдите в папку src и ипользуйте цели из Makefile:
+   make install
+</pre>
+
+    <h2 id="usage">Запуск игры</h2>
+    <p>Запустите игру с помощью команды:</p>
+    <pre>./bild/tetris</pre>
+
+    <h2 id="game-controls">Кнопки управления игрой</h2>
+    <ul>
+        <li><strong>S:</strong> начало игры</li>
+        <li><strong>срелка влево:</strong> движение фигуры влево</li>
+        <li><strong>стрелка вправо:</strong> движение фигуры вправо</li>
+        <li><strong>стрелка вверх:</strong> Hard Drop</li>
+        <li><strong>стрелка вниз:</strong> движение фигуры вниз</li>
+        <li><strong>пробел:</strong> поворот фигуры на 90 градусов</li>
+        <li><strong>P/ENTER:</strong> пауза</li>
+        <li><strong>escape:</strong> выход из игры</li>
+    </ul>
+</body>
+
+</html>
+</file>
+
+<file path="gui/cli/interface.c">
+#include "interface.h"
+
+void terminate_game() {
+  endwin();
+  exit(0);
+}
+
+void render(GameInfo_t info) {
+  refresh();
+  WINDOW *win = newwin(BOARD + FIELD_H, BOARD + FIELD_W * 3, 0, 0);
+  WINDOW *win_info = newwin(22, 15, 0, 32 + 1);
+  WINDOW *next_fig = newwin(6, 10, 15, 35);
+
+  box(win, 0, 0);
+  box(win_info, 0, 0);
+  box(next_fig, 0, 0);
+  mvwprintw(win_info, 1, 2, "LEVEL");
+  mvwprintw(win_info, 4, 2, "SCORE");
+  mvwprintw(win_info, 7, 2, "HIGH SCORE");
+  mvwprintw(win_info, 10, 2, "SPEED");
+  mvwprintw(win_info, 13, 2, "NEXT");
+  wrefresh(win);
+  wrefresh(win_info);
+  if (info.pause == GameStart) {
+    mvwprintw(win, 3, 6,
+              "PRESS "
+              "S"
+              " TO START");
+  }
+
+  else if (info.pause == YouLost) {
+    mvwprintw(win, 3, 9, "GAME OVER");
+    mvwprintw(win, 6, 7,
+              "PRESS "
+              "S"
+              " TO START");
+  } else {
+    render_basic(info, win, win_info, next_fig);
+    if (info.pause == GamePause) {
+      mvwprintw(win, 3, 6, "PAUSE");
+    }
+  }
+
+  wrefresh(win);
+  wrefresh(win_info);
+  wrefresh(next_fig);
+  for (int i = 0; i < FIELD_H; i++) {
+    free(info.field[i]);
+  }
+  free(info.field);
+
+  for (int i = 0; i < FIELD_NEXT; i++) {
+    free(info.next[i]);
+  }
+  free(info.next);
+  delwin(next_fig);
+  delwin(win);
+  delwin(win_info);
+}
+
+void render_basic(GameInfo_t info, WINDOW *win, WINDOW *win_info,
+                  WINDOW *next_fig) {
+  for (int i = 0; i < FIELD_H; i++) {
+    for (int j = 0; j < FIELD_W; j++) {
+      if (info.field[i][j] == 1) {
+        mvwaddch(win, i + 1, 3 * j + 1, ACS_CKBOARD);
+        mvwaddch(win, i + 1, 3 * j + 2, ACS_CKBOARD);
+        mvwaddch(win, i + 1, 3 * j + 3, ACS_CKBOARD);
+      } else {
+        mvwprintw(win, i + 1, 3 * j + 1, "   ");
+      }
+    }
+  }
+  mvwprintw(win_info, 2, 2, "%d", info.level);
+  mvwprintw(win_info, 5, 2, "%d", info.score);
+  mvwprintw(win_info, 8, 2, "%d", info.high_score);
+  mvwprintw(win_info, 11, 2, "%d", info.speed);
+
+  for (int i = 0; i < FIELD_NEXT; i++) {
+    for (int j = 0; j < FIELD_NEXT; j++) {
+      if (info.next[i][j] == 1) {
+        mvwaddch(next_fig, i + 1, 2 * j + 1, ACS_CKBOARD);
+        mvwaddch(next_fig, i + 1, 2 * j + 2, ACS_CKBOARD);
+      } else
+        mvwprintw(next_fig, i + 1, 2 * j + 1, "  ");
+    }
+  }
+}
+</file>
+
+<file path="gui/cli/interface.h">
+#ifndef INTERFACE_H
+#define INTERFACE_H
+
+#include "../../brick_game/tetris/game_info.h"
+
+#define BOARD 2
+#define FIELD_NEXT 4
+
+void render_basic(GameInfo_t info, WINDOW *win, WINDOW *win_info,
+                  WINDOW *next_fig);
+void render(GameInfo_t info);
+void terminate_game();
+
+#endif
+</file>
+
+<file path="tests/test.c">
+#include <check.h>
+#include <stdlib.h>
+
+#include "../brick_game/tetris/game_info.h"
+#include "../brick_game/tetris/user_input.h"
+#include "../gui/cli/interface.h"
+
+START_TEST(test_HighScore) {
+  State_t *state = getCurrentState();
+  init_state();
+  FILE *file = fopen("max_score.txt", "w");
+  fprintf(file, "1234");
+  fclose(file);
+
+  max_score();
+  GameInfo_t game = updateCurrentState();
+  ck_assert_int_eq(game.high_score, 1234);
+
+  state->score = 5678;
+  max_score();
+  file = fopen("max_score.txt", "r");
+  int high_score;
+  fscanf(file, "%d", &high_score);
+  fclose(file);
+
+  ck_assert_int_eq(high_score, 5678);
+}
+END_TEST
+
+START_TEST(test_init1) {
+  State_t *state = getCurrentState();
+  init_state();
+  ck_assert_int_eq(state->score, 0);
+  ck_assert_int_eq(state->level, 1);
+  ck_assert_int_eq(state->speed, 500);
+  ck_assert_int_eq(state->pause, 0);
+
+  game_over();
+}
+END_TEST
+
+START_TEST(test_init2) {
+  State_t *state = getCurrentState();
+  init_state();
+  ck_assert_ptr_nonnull(state->field);
+  spawn_new_figure();
+  ck_assert_int_eq(state->coord_x, -1);
+  shift_figure();
+  ck_assert_int_eq(state->coord_x, 0);
+  game_over();
+}
+END_TEST
+
+START_TEST(test_init3) {
+  State_t *state = getCurrentState();
+  init_state();
+  ck_assert_ptr_nonnull(state->field);
+  spawn_new_figure();
+  shift_figure();
+  move_left();
+  ck_assert_int_eq(state->coord_y, 2);
+  game_over();
+}
+END_TEST
+
+START_TEST(test_UserInputLeft) {
+  State_t *state = getCurrentState();
+  init_state();
+  spawn_new_figure();
+  shift_figure();
+  userInput(Left, false);
+  ck_assert_int_eq(state->coord_y, 2);
+  game_over();
+}
+END_TEST
+
+START_TEST(test_noleft) {
+  State_t *state = getCurrentState();
+  init_state();
+  spawn_new_figure();
+  shift_figure();
+  while (state->coord_y != 0) {
+    move_left();
+  }
+  move_left();
+  ck_assert_int_eq(state->coord_y, 0);
+  game_over();
+}
+END_TEST
+
+START_TEST(test_init4) {
+  State_t *state = getCurrentState();
+  init_state();
+  spawn_new_figure();
+  shift_figure();
+  move_down();
+  ck_assert_int_eq(state->coord_x, 1);
+  game_over();
+}
+END_TEST
+
+START_TEST(test_UserInputDown) {
+  State_t *state = getCurrentState();
+  init_state();
+  spawn_new_figure();
+  shift_figure();
+  userInput(Down, false);
+  ck_assert_int_eq(state->coord_x, 1);
+  game_over();
+}
+END_TEST
+
+START_TEST(test_init5) {
+  State_t *state = getCurrentState();
+  init_state();
+  spawn_new_figure();
+  ck_assert_ptr_nonnull(state->figure);
+  shift_figure();
+  move_right();
+  ck_assert_int_eq(state->coord_y, 4);
+  game_over();
+}
+END_TEST
+
+START_TEST(test_noright) {
+  State_t *state = getCurrentState();
+  init_state();
+  spawn_new_figure();
+  shift_figure();
+  while (state->coord_y + state->size_figure != FIELD_W) {
+    move_right();
+  }
+  move_right();
+  ck_assert_int_eq(state->coord_y, 10 - state->size_figure);
+  game_over();
+}
+END_TEST
+
+START_TEST(test_UserInputRight) {
+  State_t *state = getCurrentState();
+  init_state();
+  spawn_new_figure();
+  shift_figure();
+  userInput(Right, false);
+  ck_assert_int_eq(state->coord_y, 4);
+  game_over();
+}
+END_TEST
+
+START_TEST(test_init6) {
+  State_t *state = getCurrentState();
+  init_state();
+  spawn_new_figure();
+  shift_figure();
+  hard_drop();
+  ck_assert_int_eq(state->coord_x, 19);
+  game_over();
+}
+END_TEST
+
+START_TEST(test_UserInputhard) {
+  State_t *state = getCurrentState();
+  init_state();
+  spawn_new_figure();
+  shift_figure();
+  userInput(Up, false);
+  ck_assert_int_eq(state->coord_x, 19);
+  game_over();
+}
+END_TEST
+
+START_TEST(test_init7) {
+  State_t *state = getCurrentState();
+  init_state();
+  spawn_new_figure();
+  shift_figure();
+  int **temp = create_matrix(state->size_figure, state->size_figure);
+  copy_matrix(state->figure, temp, state->size_figure, state->size_figure);
+  rotate_figure();
+  rotate_figure();
+  rotate_figure();
+  rotate_figure();
+  for (int i = 0; i < state->size_figure; i++) {
+    for (int j = 0; j < state->size_figure; j++) {
+      ck_assert_int_eq(state->figure[i][j], temp[i][j]);
+    }
+  }
+  remove_matrix(temp, state->size_figure);
+  game_over();
+}
+END_TEST
+
+START_TEST(test_UserInputAction) {
+  State_t *state = getCurrentState();
+  init_state();
+  spawn_new_figure();
+  int **temp = create_matrix(state->size_figure, state->size_figure);
+  copy_matrix(state->figure, temp, state->size_figure, state->size_figure);
+  userInput(Action, false);
+  userInput(Action, false);
+  userInput(Action, false);
+  userInput(Action, false);
+  for (int i = 0; i < state->size_figure; i++) {
+    for (int j = 0; j < state->size_figure; j++) {
+      ck_assert_int_eq(state->figure[i][j], temp[i][j]);
+    }
+  }
+  remove_matrix(temp, state->size_figure);
+  game_over();
+}
+END_TEST
+
+START_TEST(test_pause) {
+  State_t *state = getCurrentState();
+  init_state();
+  spawn_new_figure();
+  pause_game();
+  ck_assert_int_eq(state->pause, 1);
+  game_over();
+}
+END_TEST
+
+START_TEST(test_UserInputpause) {
+  State_t *state = getCurrentState();
+  init_state();
+  userInput(Pause, false);
+  ck_assert_int_eq(state->pause, 1);
+  game_over();
+}
+END_TEST
+
+START_TEST(test_updatelevel) {
+  State_t *state = getCurrentState();
+  init_state();
+  spawn_new_figure();
+  shift_figure();
+  update_level();
+  ck_assert_int_eq(state->level, 1);
+  state->score = 10000;
+  update_level();
+  ck_assert_int_eq(state->level, 10);
+  game_over();
+}
+END_TEST
+
+START_TEST(test_deleterow) {
+  State_t *state = getCurrentState();
+  init_state();
+  for (int j = 0; j < FIELD_W; j++) {
+    state->field[19][j] = 1;
+  }
+  delete_row();
+  for (int k = 0; k < FIELD_W; k++) {
+    ck_assert_int_eq(state->field[19][k], 0);
+  }
+  game_over();
+}
+END_TEST
+
+START_TEST(test_attachfig) {
+  State_t *state = getCurrentState();
+  init_state();
+  spawn_new_figure();
+  while (state->coord_x != 19) {
+    shift_figure();
+  }
+  attach_figure();
+  int one = 0;
+  for (int k = 0; k < FIELD_W; k++) {
+    if (state->field[19][k] == 1) {
+      one++;
+    }
+  }
+  ck_assert_int_ne(one, 0);
+  game_over();
+}
+END_TEST
+
+START_TEST(test_userInput_terminate) {
+  State_t *state = getCurrentState();
+  init_state();
+  userInput(Terminate, false);
+  ck_assert_ptr_eq(state->field, NULL);
+}
+END_TEST
+
+START_TEST(test_userInput_start) {
+  State_t *state = getCurrentState();
+  init_state();
+  userInput(Start, false);
+  ck_assert_int_eq(state->status, 1);
+  game_over();
+}
+END_TEST
+
+START_TEST(test_overflow) {
+  State_t *state = getCurrentState();
+  init_state();
+  for (int j = 0; j < FIELD_W; j++) {
+    state->field[j][3] = 1;
+    state->field[j][4] = 1;
+    state->field[j][5] = 1;
+    state->field[j][6] = 1;
+  }
+  spawn_new_figure();
+  shift_figure();
+  attach_figure();
+  ck_assert_int_eq(state->status, 5);
+  game_over();
+}
+END_TEST
+
+START_TEST(test_pausepause) {
+  State_t *state = getCurrentState();
+  init_state();
+  spawn_new_figure();
+  pause_game();
+  pause_game();
+  ck_assert_int_eq(state->pause, 0);
+  game_over();
+}
+END_TEST
+
+START_TEST(test_terminate) { terminate_game(); }
+END_TEST
+
+START_TEST(test_newgame) {
+  State_t *state = getCurrentState();
+  init_state();
+  for (int j = 0; j < FIELD_W; j++) {
+    state->field[j][3] = 1;
+    state->field[j][4] = 1;
+    state->field[j][5] = 1;
+    state->field[j][6] = 1;
+  }
+  spawn_new_figure();
+  shift_figure();
+  attach_figure();
+  ck_assert_int_eq(state->status, 5);
+  init_state();
+  game_over();
+}
+END_TEST
+
+START_TEST(test_procces_timer) {
+  State_t *state = getCurrentState();
+  init_state();
+  procces_timer();
+  ck_assert_int_eq(state->left_time, 500);
+  state->status = Moving;
+  procces_timer();
+  ck_assert_int_eq(state->left_time, 500);
+  game_over();
+}
+END_TEST
+
+START_TEST(test_spawn) {
+  State_t *state = getCurrentState();
+  init_state();
+  spawn_new_figure();
+  while (state->coord_x != 19) {
+    shift_figure();
+  }
+  attach_figure();
+  spawn_new_figure();
+  ck_assert_int_eq(state->status, 2);
+  game_over();
+}
+END_TEST
+
+Suite *tetris_suite(void) {
+  Suite *s;
+  TCase *tc_core;
+
+  s = suite_create("Tetris");
+
+  tc_core = tcase_create("Core");
+
+  tcase_add_test(tc_core, test_HighScore);
+  tcase_add_test(tc_core, test_init1);
+  tcase_add_test(tc_core, test_init2);
+  tcase_add_test(tc_core, test_init3);
+  tcase_add_test(tc_core, test_UserInputLeft);
+  tcase_add_test(tc_core, test_noleft);
+  tcase_add_test(tc_core, test_init4);
+  tcase_add_test(tc_core, test_UserInputDown);
+  tcase_add_test(tc_core, test_init5);
+  tcase_add_test(tc_core, test_UserInputRight);
+  tcase_add_test(tc_core, test_noright);
+  tcase_add_test(tc_core, test_init6);
+  tcase_add_test(tc_core, test_UserInputhard);
+  tcase_add_test(tc_core, test_init7);
+  tcase_add_test(tc_core, test_UserInputAction);
+  tcase_add_test(tc_core, test_pause);
+  tcase_add_test(tc_core, test_UserInputpause);
+  tcase_add_test(tc_core, test_updatelevel);
+  tcase_add_test(tc_core, test_deleterow);
+  tcase_add_test(tc_core, test_attachfig);
+  tcase_add_test(tc_core, test_userInput_terminate);
+  tcase_add_test(tc_core, test_userInput_start);
+  tcase_add_test(tc_core, test_overflow);
+  tcase_add_test(tc_core, test_pausepause);
+  tcase_add_test(tc_core, test_terminate);
+  tcase_add_test(tc_core, test_newgame);
+  tcase_add_test(tc_core, test_procces_timer);
+  tcase_add_test(tc_core, test_spawn);
+  suite_add_tcase(s, tc_core);
+
+  return s;
+}
+
+int main() {
+  int failed;
+  Suite *s;
+  SRunner *sr;
+
+  s = tetris_suite();
+  sr = srunner_create(s);
+
+  srunner_run_all(sr, CK_NORMAL);
+  failed = srunner_ntests_failed(sr);
+  srunner_free(sr);
+
+  return (failed == 0) ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+</file>
+
+<file path="Makefile">
+# Compiler and flags
+CC = gcc
+CFLAGS = -Wall -Wextra -Werror -std=c11
+LDFLAGS = -lncurses
+GCOV_FLAGS = -fprofile-arcs -ftest-coverage
+UNAME=$(shell uname -s)
+ 
+
+# Target executable
+TARGET = tetris
+
+ifeq ($(UNAME), Linux)
+	LIBS=-lcheck -lm -lrt -lpthread -lsubunit
+endif
+ifeq ($(UNAME), Darwin)
+	LIBS=-lcheck
+endif
+
+# Directories
+BUILD_DIR = build
+INSTALL_DIR = ../build
+GUI_DIR = gui/cli
+TETRIS_DIR = brick_game/tetris
+DIST_SOURCES = $(TETRIS_DIR)/* $(GUI_DIR)/* tests/* dvi/* Makefile
+TEST_DIR = tests
+
+# Source files
+TETRIS_SRCS=$(wildcard $(TETRIS_DIR)/*.c)
+TEST_SRCS=$(wildcard $(TEST_DIR)/*.c) $(TETRIS_DIR)/game_info.c $(TETRIS_DIR)/tetris_fsm.c $(TETRIS_DIR)/user_input.c $(wildcard $(GUI_DIR)/*.c)
+GUI_SRCS=$(wildcard $(GUI_DIR)/*.c)
+ALL_SRCS= $(TETRIS_SRCS) $(GUI_SRCS)
+HEADERS=$(wildcard $(TETRIS_DIR)/*.h) $(wildcard $(GUI_DIR)/*.h)
+
+# Object files
+TETRIS_OBJS = $(TETRIS_SRCS:%.c=$(BUILD_DIR)/%.o)
+GUI_OBJS = $(GUI_SRCS:%.c=$(BUILD_DIR)/%.o)
+TOBJS = $(TEST_SRCS:%.c=$(BUILD_DIR)/%.o)
+OBJS = $(TETRIS_OBJS) $(GUI_OBJS)
+
+
+# Default target
+all: $(BUILD_DIR) $(TARGET)
+
+run:$(BUILD_DIR) $(TARGET)
+	./$(TARGET)
+
+# Create build directory
+$(BUILD_DIR):
+	mkdir -p $(BUILD_DIR)/brick_game/tetris
+	mkdir -p $(BUILD_DIR)/gui/cli
+
+# Build executable
+$(TARGET): $(OBJS)
+	$(CC) $(OBJS) -o $@ $(LDFLAGS) $(CFLAGS)
+
+# Build object files
+$(BUILD_DIR)/%.o: %.c
+	$(CC) $(CFLAGS) -I$(TETRIS_DIR) -I$(GUI_DIR) -c $< -o $@
+
+install: $(BUILD_DIR) $(TARGET)
+	mkdir -p $(INSTALL_DIR)
+	cp $(TARGET) $(INSTALL_DIR)/$(TARGET)
+	cp max_score.txt $(INSTALL_DIR)/max_score.txt
+	@echo "Installed"
+
+uninstall:
+	@rm -rf $(INSTALL_DIR)
+	@echo "Unstalled"
+
+dvi:
+	@open dvi/index.html > /dev/null 2>&1
+	@echo "Documentation opening..."
+
+dist: clean
+	@tar -czf tetris.tar.gz $(DIST_SOURCES) > /dev/null 2>&1
+	@echo "Archive created"
+
+test: 
+	mkdir -p $(BUILD_DIR)/tests
+	$(CC) -I$(SRC_DIR) -I$(GUI_DIR) -I$(TEST_DIR) $(TEST_SRCS) -o $(BUILD_DIR)/tests/test $(LDFLAGS) $(CFLAGS) $(LIBS)
+	./$(BUILD_DIR)/tests/test
+
+gcov_report: clean
+	mkdir -p $(BUILD_DIR)/report
+	$(CC) -I$(SRC_DIR) -I$(GUI_DIR) -I$(TEST_DIR) $(TEST_SRCS) -o $(BUILD_DIR)/report/test_gc $(LDFLAGS) $(CFLAGS) $(TEST_FLAGS) $(GCOV_FLAGS) $(LIBS)
+	./build/report/test_gc 
+	gcovr -r . --gcov-executable gcov --exclude "test/*" --exclude ".*updateUserAction.*" --html --html-details -o $(BUILD_DIR)/report/gcov_report.html --exclude-unreachable-branches --exclude-branches-by-pattern=".*"
+	@open $(BUILD_DIR)/report/gcov_report.html > /dev/null 2>&1
+#	If you are working through the WSL, you need:
+#	sudo sudo apt install wslu
+# 	@wslview $(BUILD_DIR)/report/gcov_report.html > /dev/null 2>&1
+
+valgrind:
+	valgrind -s --tool=memcheck --track-origins=yes --leak-check=yes ./tetris
+
+# Clean build artifacts
+clean:
+	rm -rf $(BUILD_DIR) $(TARGET)
+
+check_style:
+	cp ../materials/linters/.clang-format .clang-format
+	clang-format -n  $(ALL_SRCS) $(HEADERS) $(TEST_DIR)/*.c
+	rm -rf .clang-format
+
+fix_style:
+	cp ../materials/linters/.clang-format .clang-format
+	clang-format -i  $(ALL_SRCS) $(HEADERS) $(TEST_DIR)/*.c
+	rm -rf .clang-format
+
+# Rebuild from scratch
+re: clean all
+
+# Phony targets
+.PHONY: all clean re dvi
+</file>
+
+<file path="max_score.txt">
+5678
+</file>
+
+</files>
